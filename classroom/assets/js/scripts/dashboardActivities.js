@@ -441,7 +441,7 @@ function loadActivity(isDoable) {
 
     }
     if (UserManager.getUser().isRegular && Activity.correction > 0) {
-        correction += '<div id="commentary-panel" class="c-primary-form"><label>' + i18next.t("classroom.activities.comments") + '</label><textarea id="commentary-textarea" style="width:90%" rows="8">' + Activity.commentary + '</textarea></div>'
+        correction += '<div id="commentary-panel" class="c-primary-form"><label>' + i18next.t("classroom.activities.comments") + '</label><textarea id="commentary-textarea" rows="20">' + Activity.commentary + '</textarea></div>'
     }
     if (!UserManager.getUser().isRegular && Activity.correction > 0) {
         correction += '<div id="commentary-panel">' + Activity.commentary + '</div>'

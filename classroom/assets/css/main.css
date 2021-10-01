@@ -1606,6 +1606,29 @@ i.line_height34 {
     background-color: var(--correction-0);
 }
 
+#activity-correction {
+    min-height: 100%;
+    box-shadow: 1px 1px 6px var(--classroom-shadow-1);
+    position: relative;
+    transform: translateY(-2.5em);
+    padding-top: 2.5em;
+    padding-bottom: 1em;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 1em;
+    margin-bottom: -2.5em;
+
+}
+
+#commentary-textarea {
+    width: 100%;
+    flex: 1;
+    /* resize: none; */
+    max-height: 100%;
+}
+
 .note-choice {
     border-radius: 25px;
     width: 100%;
