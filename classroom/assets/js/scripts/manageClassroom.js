@@ -2,6 +2,7 @@
 $('body').on('click', '.teacher-new-classe', function (event) {
     ClassroomSettings.classroom = null
     navigatePanel('classroom-dashboard-form-classe-panel', 'dashboard-classes-teacher')
+    $('#table-students ul').html("");
 })
 
 
@@ -23,10 +24,10 @@ $('body').on('click', '.modal-student-password', function () {
     let self = $(this)
     ClassroomSettings.student = parseInt(self.parent().parent().parent().attr('data-student-id'))
     Main.getClassroomManager().generatePassword(ClassroomSettings.student).then(function (response) {
-        displayNotification('#notif-div', "classroom.notif.newPwd", "success", {
-            "pseudo": response.pseudo,
-            "pwd": response.mdp
-        })
+        displayNotification('#notif-div', "classroom.notif.newPwd", "success", `'{
+            "pseudo": "${response.pseudo}",
+            "pwd": "${response.mdp}"
+        }'`)
         self.parent().find('.pwd-display-stud .masked').html(response.mdp)
 
     })
@@ -57,9 +58,14 @@ $('body').on('click', '.modal-classroom-delete', function (e) {
     if (confirm) {
         ClassroomSettings.classroom = $(this).parent().parent().parent().attr('data-link')
         Main.getClassroomManager().deleteClassroom(ClassroomSettings.classroom).then(function (classroom) {
+            // concatenate classroom name + group in GAR context, else set only classroom name
+            const classroomFullName = classroom.group != null 
+                                        ? `${classroom.name}-${classroom.group}`
+                                        : `${classroom.name}`
+
             deleteClassroomInList(classroom.link);
             classroomsDisplay();
-            displayNotification('#notif-div', "classroom.notif.classroomDeleted", "success", `'{"classroomName": "${classroom.name}"}'`);
+            displayNotification('#notif-div', "classroom.notif.classroomDeleted", "success", `'{"classroomName": "${classroomFullName}"}'`);
         })
         ClassroomSettings.classroom = null
     }
@@ -241,6 +247,10 @@ $('body').on('click', '.save-student-in-classroom', function () {
         })
         Main.getClassroomManager().addUsersToGroup(students, existingStudents, ClassroomSettings.classroom).then(function (response) {
             if(!response.isUsersAdded){
+                if(response.noUser){
+                    displayNotification('#notif-div', "classroom.notif.noUser", "error");
+                    return;
+                }
                 /**
                  * Update Rémi : Users limitation by group 
                  * possible return : personalLimit, personalLimitAndGroupOutDated, bothLimitReached
@@ -262,9 +272,13 @@ $('body').on('click', '.save-student-in-classroom', function () {
             }
         })
     } else {
-        $('#no-student-label').remove()
-        $('#table-students ul').append(addStudentRow($('.student-form-name').val()))
-        pseudoModal.closeModal('add-student-modal')
+        if ($('.student-form-name').val() != ''){
+            $('#no-student-label').remove()
+            $('#table-students ul').append(addStudentRow($('.student-form-name').val()))
+            pseudoModal.closeModal('add-student-modal')
+        } else {
+            displayNotification('#notif-div', "classroom.notif.noUser", "error");
+        }
     }
 
 })
@@ -297,13 +311,13 @@ function openCsvModal(){
     pseudoModal.openModal('import-csv');
 }
 
+
 /**
  * Add students to a classroom using a csv file
  */
 function importLearnerCsv(){
     if(ClassroomSettings.classroom){
         csvToClassroom(ClassroomSettings.classroom).then((response) => {
-
             /**
              * Updated @Rémi
              * the case where the students was not added was not implemented
@@ -328,8 +342,47 @@ function importLearnerCsv(){
         .catch((response) => {
             console.warn(response);
         });
+    } else {
+
+        // import the students before the class creation
+        const csvFile = document.getElementById('importcsv-fileinput').files[0];
+        if (csvFile){
+            const reader = new FileReader();
+            try {
+                reader.readAsText(csvFile);
+                reader.onload = function (event) {
+                    let csv = event.target.result;
+                    let lines = csv.split("\n");
+                    let headers = lines[0].split(/[,;]/);
+                    for(let i = 0; i < headers.length; i++) {
+                        headers[i] = headers[i].replace("\r","");
+                    }
+                    
+                    for (let i = 1; i < lines.length; i++) {
+                        let currentline = lines[i].split(/[,;]/);
+                        $('#table-students ul').append(addStudentRow(currentline[0]));
+                    }
+
+                    if ($('#table-students ul li .col').length > 1) {
+                        $('#no-student-label').remove();
+                    }
+                    // remove the previous filename uploaded on open 
+                    $('#importcsv-fileinput').val("");
+                    pseudoModal.closeModal('import-csv');
+                }
+            } catch (error) {
+                reject(`Error while opening the csv file! Reason: ${error}`);
+                displayNotification('#notif-div', "classroom.notif.errorWithCsv", "error", `'{"error": "${error}"}'`);
+            }
+        } else {
+            reject('No csv file given!');
+            displayNotification('#notif-div', "classroom.notif.CsvFileMissing", "error");
+        }
+        $('#table-students ul').html("");
     }
 }
+
+
 
 /**
  * Process and send data from csv to the server
@@ -339,11 +392,11 @@ function csvToClassroom(link) {
     return new Promise((resolve, reject) => {
         let csvFile = document.getElementById('importcsv-fileinput').files[0];
         if(csvFile){
-            var reader = new FileReader();
+            const reader = new FileReader();
             try {
                 reader.readAsText(csvFile);
                 reader.onload = function (event) {
-                    var csv = event.target.result;
+                    const csv = event.target.result;
                     let json = csvJSON(csv);
                     Main.getClassroomManager().addUsersToGroupByCsv(JSON.parse(json), link, "csv")
                     .then((response) => {
@@ -368,36 +421,31 @@ function csvToClassroom(link) {
  */
 function csvJSON(csv) {
 
-    var lines = csv.split("\n");
-
-    var result = [];
+    let lines = csv.split("\n");
+    const result = [];
 
     // NOTE: If your columns contain commas in their values, you'll need
     // to deal with those before doing the next step 
     // (you might convert them to &&& or something, then convert them back later)
     // jsfiddle showing the issue https://jsfiddle.net/
-    var headers = lines[0].split(/[,;]/);
+    let headers = lines[0].split(/[,;]/);
     
     for(let i=0; i< headers.length; i++){
         headers[i] = headers[i].replace("\r","")
     }
     
-    for (var i = 1; i < lines.length; i++) {
+    for (let i = 1; i < lines.length; i++) {
+        let obj = {};
+        let currentline = lines[i].split(/[,;]/);
 
-        var obj = {};
-        var currentline = lines[i].split(/[,;]/);
-
-        for (var j = 0; j < headers.length; j++) {
+        for (let j = 0; j < headers.length; j++) {
             obj[headers[j]] = currentline[j].replace("\r","");
         }
-
         result.push(obj);
-
     }
     
     // remove the previous filename uploaded on open 
-    let csvInput = document.querySelector('#importcsv-fileinput')
-    csvInput.value = ""
+    $('#importcsv-fileinput').val("");
     return JSON.stringify(result); //JSON
 }
 
